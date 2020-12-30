@@ -1,0 +1,138 @@
+<?xml version='1.0' encoding='utf-8'?>
+<interface version="1.0">
+  <object class="tk.Toplevel" id="toplevel">
+    <property name="geometry">640x480</property>
+    <property name="height">480</property>
+    <property name="minsize">640|480</property>
+    <property name="resizable">none</property>
+    <property name="title" translatable="yes">RedGifs Downloader</property>
+    <property name="width">640</property>
+    <child>
+      <object class="ttk.Frame" id="frame">
+        <property name="height">480</property>
+        <property name="width">640</property>
+        <layout manager="place">
+          <property name="anchor">nw</property>
+          <property name="height">480</property>
+          <property name="width">640</property>
+          <property name="x">0</property>
+          <property name="y">0</property>
+        </layout>
+        <child>
+          <object class="ttk.Button" id="btn_folder">
+            <property name="command">getDirectory</property>
+            <property name="text" translatable="yes">Select directory</property>
+            <layout manager="place">
+              <property name="anchor">nw</property>
+              <property name="height">35</property>
+              <property name="relx">0.033</property>
+              <property name="rely">0.022</property>
+              <property name="width">125</property>
+              <property name="x">0</property>
+              <property name="y">0</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Label" id="lbl_folder">
+            <property name="text" translatable="yes">Current directory: none</property>
+            <property name="textvariable">lbl_foldervar</property>
+            <layout manager="place">
+              <property name="anchor">nw</property>
+              <property name="relx">.267</property>
+              <property name="rely">0.040</property>
+              <property name="x">0</property>
+              <property name="y">0</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Button" id="btn_file">
+            <property name="command">openFile</property>
+            <property name="text" translatable="yes">Select file</property>
+            <layout manager="place">
+              <property name="anchor">nw</property>
+              <property name="height">35</property>
+              <property name="relx">0.033</property>
+              <property name="rely">0.111</property>
+              <property name="width">125</property>
+              <property name="x">0</property>
+              <property name="y">0</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Label" id="lbl_file">
+            <property name="text" translatable="yes">Current file: none</property>
+            <property name="textvariable">lbl_filevar</property>
+            <layout manager="place">
+              <property name="anchor">nw</property>
+              <property name="relx">.267</property>
+              <property name="rely">0.129</property>
+              <property name="x">0</property>
+              <property name="y">0</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Separator" id="separator_7">
+            <property name="orient">horizontal</property>
+            <layout manager="place">
+              <property name="anchor">nw</property>
+              <property name="relheight">0</property>
+              <property name="relwidth">.933</property>
+              <property name="relx">0.033</property>
+              <property name="rely">0.23</property>
+              <property name="x">0</property>
+              <property name="y">0</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Treeview" id="tv_files">
+            <property name="selectmode">browse</property>
+            <property name="show">headings</property>
+            <layout manager="place">
+              <property name="anchor">nw</property>
+              <property name="relwidth">0.933</property>
+              <property name="relx">0.033</property>
+              <property name="rely">0.289</property>
+              <property name="x">0</property>
+              <property name="y">0</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Progressbar" id="pb_download">
+            <property name="orient">horizontal</property>
+            <layout manager="place">
+              <property name="anchor">nw</property>
+              <property name="relheight">0.0525</property>
+              <property name="relwidth">.933</property>
+              <property name="relx">0.033</property>
+              <property name="rely">0.790</property>
+              <property name="x">0</property>
+              <property name="y">0</property>
+            </layout>
+          </object>
+        </child>
+        <child>
+          <object class="ttk.Button" id="btn_download">
+            <property name="command">downloadFiles</property>
+            <property name="text" translatable="yes">Download</property>
+            <layout manager="place">
+              <property name="anchor">ne</property>
+              <property name="height">45</property>
+              <property name="relheight">0.0</property>
+              <property name="relx">0.967</property>
+              <property name="rely">0.87</property>
+              <property name="width">125</property>
+              <property name="x">0</property>
+              <property name="y">0</property>
+            </layout>
+          </object>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>
