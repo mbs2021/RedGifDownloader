@@ -1,5 +1,10 @@
 # RedGifDownloader
-Repository of RedGif Downloader, there isn't much to explain
+Repository of RedGif Downloader, there isn't much to explain<br/>
+Usage:<br/>
+Create a text file (.txt) and paste the urls or video code, one by line.<br/>
+Inside the program select a directory to save (it is saved so you don't have to assign a folder every time you open the software)<br/>
+Select the text file with the urls.<br/>
+Press the download button.
 ____________________________________________________________
 
 In case you are using the source instead of the binaries (which will be posted when compiled hopepefully)
