@@ -107,6 +107,8 @@ class RedGifsDownloader:
 			configCreator()
 		
 	def getDirectory(self):
+		global folder
+
 		folder = filedialog.askdirectory()
 
 		if folder != '':
@@ -130,7 +132,7 @@ class RedGifsDownloader:
 			populateTable(data, self.builder.get_object('tv_files'), self.builder.get_object('toplevel'))
 
 	def downloadFiles(self):
-		global data, data2
+		global data, data2, folder
 
 		count = 0
 		window = self.builder.get_object('toplevel')
