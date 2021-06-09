@@ -77,54 +77,65 @@ def configRewrite(folder):
 def convertSize(size):
 	return str(round((size/1024000), 2)) +' MB'
 
+def gyfMetadataRequest(gyf_name, stream = False):
+	request = requests.get('https://api.redgifs.com/v1/gfycats/' + gyf_name, stream=stream)
+
+	if request.ok:
+		return request
+	
+	return None
+
+def gyfRequest(url, stream = False):
+	request = requests.get(url, stream=stream)
+
+	if request.ok:
+		return request
+
 def populateTable(data, tree, window):
 	count = 0
 	tree.delete(*tree.get_children())
-	tree['columns'] = ('id', 'name', 'size', 'status')
+	tree['columns'] = ('id', 'section', 'name', 'size', 'status')
 	tree.column('id', width='35')
 	tree.heading('id', text='#', anchor='center')
 	tree.column('name', width='300', anchor='center')
 	tree.heading('name', text='Name')
+	tree.column('section', width='300', anchor='center')
+	tree.heading('section', text='Section')
 	tree.column('size', width='120', anchor='center')
 	tree.heading('size', text='File size')
 	tree.column('status', width='140', anchor='center')
 	tree.heading('status', text='Status')
 
 	for x in data:
+		section = None
+		name = None
+
 		if x.find('redgifs.com/') != -1:
 			if x.find('/watch/') != -1:
-				file = x.split('/watch/')
-				file = ''.join([file[index] for index in [1]])
+				section = 'gyf'
+				name = x.split('/watch/')
+				name = ''.join([name[index] for index in [1]])
 			else:
-				file = x.split('.com/')
-				file = ''.join([file[index] for index in [1]])
+				name = x.split('.com/')
+				name = ''.join([name[index] for index in [1]])
+
 			if x.find('.webm') != -1 or x.find('.mp4') != -1:
-				file = file.split('.')
-				file = ''.join([file[index] for index in [0]])
+				name = name.split('.')
+				name = ''.join([name[index] for index in [0]])
 		else:
-			file = x
+			name = x
 
-		if file:
+		if name:
 			count += 1
-			words = wordninja.split(file)
+			gyf_metadata = gyfMetadataRequest(name, True)
 
-			try: 
-				if words.index('mobile') != 1:
-					index = words.index('mobile')
-					words[index] = '-mobile'
-			except ValueError:
-				print('')
-
-			for x in range(3):
-				words[x] = words[x].capitalize()
-
-			file = ''.join(words)
-			url = 'https://thumbs2.redgifs.com/' + file + '.mp4'
-			r = requests.get(url, stream=True)
-			total_length = int(r.headers.get('content-length'))
-			tree.insert('', 'end', iid=count, values=(count, file, convertSize(total_length), 'Pending'))
-			tree.yview(count-2)
-			window.update()
+			if gyf_metadata:
+				if 'gfyItem' in gyf_metadata.json() and 'mp4Url' in gyf_metadata.json()['gfyItem']:
+					gyf_mp4 = gyfRequest(gyf_metadata.json()['gfyItem']['mp4Url'])
+					total_length = int(gyf_mp4.headers.get('content-length'))
+					tree.insert('', 'end', iid=count, values=(count, section, name, convertSize(total_length), 'Pending'))
+					tree.yview(count-2)
+					window.update()
 
 class RedGifsDownloader:
 	def __init__(self):
@@ -212,7 +223,7 @@ class RedGifsDownloader:
 					url = 'https://thumbs2.redgifs.com/' + file + '.mp4'
 					r = requests.get(url, stream=True)
 					total_length = int(r.headers.get('content-length'))
-					tree.item(count, values=(count, file, convertSize(total_length), 'Downloading'))
+					tree.item(count, values=(count, '', file, convertSize(total_length), 'Downloading'))
 					tree.yview(count-1)
 
 					with open(folder + '/' + file + '.mp4', 'wb') as f:
@@ -227,7 +238,7 @@ class RedGifsDownloader:
 				else:
 					print('')
 
-				tree.item(count, values=(count, file, convertSize(total_length), 'Completed'))
+				tree.item(count, values=(count, '', file, convertSize(total_length), 'Completed'))
 
 			bar['maximum'] = 100
 			bar['value'] = 100
