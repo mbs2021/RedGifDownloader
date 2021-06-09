@@ -4,6 +4,7 @@ import pygubu
 import configparser
 import wordninja
 import requests
+import json
 from configparser import ConfigParser
 from tkinter import messagebox
 from tkinter import filedialog
@@ -30,11 +31,17 @@ def configLoader():
 			config_key = item[0]
 			config_value = item[1]
 
-			config_param_groups = re.search(r"\[([A-Za-z0-9_]+)\]", config_value)
+			config_param_groups = re.findall(r"\[([A-Za-z0-9_]+)\]", config_value)
 
 			if config_param_groups != None:
-				for group in config_param_groups.groups():
-					config_value = config_value.replace('[' + group + ']', config_object[section].get(group))
+				for group in config_param_groups:
+					config_value = config_value.replace('[' + group + ']', (section_params[config_key] if config_key in section_params else config_object[section].get(group)))
+
+					config_param_groups = re.findall(r"\[([A-Za-z0-9_]+)\]", config_value)
+
+					if config_param_groups != None:
+						for group in config_param_groups:
+							config_value = config_value.replace('[' + group + ']', (section_params[config_key] if config_key in section_params else config_object[section].get(group)))
 
 			section_params[config_key] = config_value
 		
@@ -44,18 +51,21 @@ def configCreator():
 	config_object = ConfigParser()
 	config_object['ROUTE'] = {
 		'root_directory': folder,
-		'profile_path': 'profiles/{username}',
+		'profile_path': '[root_directory]/profiles/{userName}',
 		'profile_metadata_path': '[profile_path]/metadata',
 		'profile_gyfs_path': '[profile_path]/gyfs',
 		'profile_profile_path': '[profile_path]/profile',
 	}
 
-	config_object['ROUTE'] = {
-		'root_directory': folder,
-		'profile_path': 'profiles/{username}',
-		'profile_metadata_path': '[profile_path]/metadata',
-		'profile_gyfs_path': '[profile_path]/gyfs',
-		'profile_profile_path': '[profile_path]/profile',
+	config_object['STORAGE'] = {
+		'save_mp4': True,
+		'save_mobile_mp4': False,
+		'save_poster': False,
+		'save_gyf_metadata': False,
+		'mobile_mp4_file_name': '{gfyName}_mobile.{ext}',
+		'mp4_file_name': '{gfyName}.{ext}',
+		'poster_file_name': '[mp4_file_name]',
+		'gyf_metadata_file_name': '{gfyName}.json',
 	}
 
 	with open(PROJECT_PATH + '/cfg.ini', 'w') as config:
@@ -116,6 +126,7 @@ def populateTable(data, tree, window):
 				name = x.split('/watch/')
 				name = ''.join([name[index] for index in [1]])
 			else:
+				section = 'gyf'
 				name = x.split('.com/')
 				name = ''.join([name[index] for index in [1]])
 
@@ -136,6 +147,78 @@ def populateTable(data, tree, window):
 					tree.insert('', 'end', iid=count, values=(count, section, name, convertSize(total_length), 'Pending'))
 					tree.yview(count-2)
 					window.update()
+
+def createPath(path):
+	global env
+
+	path_folders = path.split('/', 2)[-1].rsplit('/', 1)[0].split('/')
+
+	current_path_pointer = env['route']['root_directory']
+
+	for folder in path_folders:
+		if not os.path.exists(current_path_pointer + '/' +  folder):
+			os.mkdir(current_path_pointer + '/' +  folder)
+
+			current_path_pointer = current_path_pointer + '/' +  folder
+
+def formatFilePath(gyf_metadata, media_type):
+	global env
+
+	gyf_metadata = gyf_metadata.json()['gfyItem']
+	path = ''
+
+	if media_type == 'mp4':
+		path = env['route']['profile_gyfs_path'] + '/' + env['storage']['mp4_file_name']
+
+		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
+
+		if dynamic_variables != None:
+			for group in dynamic_variables:
+				if group != 'ext':
+					path = path.replace('{' + group + '}', gyf_metadata[group])
+				else:
+					path = path.replace('{ext}', gyf_metadata['mp4Url'].split('.')[-1])
+
+		createPath(path)
+	elif media_type == 'mobile_mp4':
+		path = env['route']['profile_gyfs_path'] + '/' + env['storage']['mobile_mp4_file_name']
+
+		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
+
+		if dynamic_variables != None:
+			for group in dynamic_variables:
+				if group != 'ext':
+					path = path.replace('{' + group + '}', gyf_metadata[group])
+				else:
+					path = path.replace('{ext}', gyf_metadata['mobileUrl'].split('.')[-1])
+		
+		createPath(path)
+	elif media_type == 'poster':
+		path = env['route']['profile_gyfs_path'] + '/' + env['storage']['poster_file_name']
+
+		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
+
+		if dynamic_variables != None:
+			for group in dynamic_variables:
+				if group != 'ext':
+					path = path.replace('{' + group + '}', gyf_metadata[group])
+				else:
+					path = path.replace('{ext}', gyf_metadata['posterUrl'].split('.')[-1])
+		
+		createPath(path)
+	elif media_type == 'gyf_metadata':
+		path = env['route']['profile_gyfs_path'] + '/' + env['storage']['gyf_metadata_file_name']
+
+		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
+
+		if dynamic_variables != None:
+			for group in dynamic_variables:
+				if group != 'ext':
+					path = path.replace('{' + group + '}', gyf_metadata[group])
+
+		createPath(path)
+
+	return path
 
 class RedGifsDownloader:
 	def __init__(self):
@@ -188,57 +271,115 @@ class RedGifsDownloader:
 			bar = self.builder.get_object('pb_download')
 
 			for x in data:
+				section = None
+				name = None
+
 				if x.find('redgifs.com/') != -1:
 					if x.find('/watch/') != -1:
-						file = x.split('/watch/')
-						file = ''.join([file[index] for index in [1]])
+						section = 'gyf'
+						name = x.split('/watch/')
+						name = ''.join([name[index] for index in [1]])
 					else:
-						file = x.split('.com/')
-						file = ''.join([file[index] for index in [1]])
-					if x.find('.webm') != -1 or x.find('.mp4') != -1:
-						file = file.split('.')
-						file = ''.join([file[index] for index in [0]])
+						section = 'gyf'
+						name = x.split('.com/')
+						name = ''.join([name[index] for index in [1]])
 
+					if x.find('.webm') != -1 or x.find('.mp4') != -1:
+						name = name.split('.')
+						name = ''.join([name[index] for index in [0]])
 				else:
-					file = x
+					name = x
 
 				total_length = 0
 				bar['value'] = 0
 				count += 1
 
-				if file:
-					words = wordninja.split(file)
+				if name:
+					gyf_metadata = gyfMetadataRequest(name, True)
 
-					try: 
-						if words.index('mobile') != 1:
-							index = words.index('mobile')
-							words[index] = '-mobile'
-					except ValueError:
-						print('')
-
-					for x in range(3):
-						words[x] = words[x].capitalize()
-
-					file = ''.join(words)
-					url = 'https://thumbs2.redgifs.com/' + file + '.mp4'
-					r = requests.get(url, stream=True)
-					total_length = int(r.headers.get('content-length'))
-					tree.item(count, values=(count, '', file, convertSize(total_length), 'Downloading'))
-					tree.yview(count-1)
-
-					with open(folder + '/' + file + '.mp4', 'wb') as f:
-						bar['maximum'] = total_length
-
-						for chunk in r.iter_content(chunk_size=1024):
-							if chunk:
-								bar.step(1024)
+					if gyf_metadata:
+						if env['storage']['save_mp4'] == 'True':
+							if 'gfyItem' in gyf_metadata.json() and 'mp4Url' in gyf_metadata.json()['gfyItem']:
+								gyf_mp4 = gyfRequest(gyf_metadata.json()['gfyItem']['mp4Url'], True)
+								total_length = int(gyf_mp4.headers.get('content-length'))
+								tree.item(count, values=(count, section + ' - mp4', name, convertSize(total_length), 'Downloading'))
+								tree.yview(count-1)
 								window.update()
-								f.write(chunk)
-								f.flush()
+
+							gyf_mp4_path = formatFilePath(gyf_metadata, 'mp4')
+
+							if not os.path.exists(gyf_mp4_path) or (os.path.exists(gyf_mp4_path) and os.path.getsize(gyf_mp4_path) <= 0):
+								with open(gyf_mp4_path, 'wb') as f:
+									bar['maximum'] = total_length
+
+									for chunk in gyf_mp4.iter_content(chunk_size=1024):
+										if chunk:
+											bar.step(1024)
+											window.update()
+											f.write(chunk)
+											f.flush()
+						
+						if env['storage']['save_mobile_mp4'] == 'True':
+							if 'gfyItem' in gyf_metadata.json() and 'mobileUrl' in gyf_metadata.json()['gfyItem']:
+								gyf_mobile_mp4 = gyfRequest(gyf_metadata.json()['gfyItem']['mobileUrl'], True)
+								total_length = int(gyf_mobile_mp4.headers.get('content-length'))
+								tree.item(count, values=(count, section + ' - mobile mp4', name, convertSize(total_length), 'Downloading'))
+								tree.yview(count-1)
+								window.update()
+
+							gyf_mobile_mp4_path = formatFilePath(gyf_metadata, 'mobile_mp4')
+
+							if not os.path.exists(gyf_mobile_mp4_path) or (os.path.exists(gyf_mobile_mp4_path) and os.path.getsize(gyf_mobile_mp4_path) <= 0):
+								with open(gyf_mobile_mp4_path, 'wb') as f:
+									bar['maximum'] = total_length
+
+									for chunk in gyf_mobile_mp4.iter_content(chunk_size=1024):
+										if chunk:
+											bar.step(1024)
+											window.update()
+											f.write(chunk)
+											f.flush()
+						
+						if env['storage']['save_poster'] == 'True':
+							if 'gfyItem' in gyf_metadata.json() and 'posterUrl' in gyf_metadata.json()['gfyItem']:
+								gyf_poster = gyfRequest(gyf_metadata.json()['gfyItem']['posterUrl'], True)
+								total_length = int(gyf_poster.headers.get('content-length'))
+								tree.item(count, values=(count, section + ' - poster', name, convertSize(total_length), 'Downloading'))
+								tree.yview(count-1)
+								window.update()
+
+							gyf_poster_path = formatFilePath(gyf_metadata, 'poster')
+
+							if not os.path.exists(gyf_poster_path) or (os.path.exists(gyf_poster_path) and os.path.getsize(gyf_poster_path) <= 0):
+								with open(gyf_poster_path, 'wb') as f:
+									bar['maximum'] = total_length
+
+									for chunk in gyf_poster.iter_content(chunk_size=1024):
+										if chunk:
+											bar.step(1024)
+											window.update()
+											f.write(chunk)
+											f.flush()
+						
+						if env['storage']['save_gyf_metadata'] == 'True':
+							total_length = int(gyf_metadata.headers.get('content-length'))
+							tree.item(count, values=(count, section + ' - metadata', name, convertSize(total_length), 'Downloading'))
+							tree.yview(count-1)
+							window.update()
+
+							gyf_metadata_path = formatFilePath(gyf_metadata, 'gyf_metadata')
+
+							if not os.path.exists(gyf_metadata_path) or (os.path.exists(gyf_metadata_path) and os.path.getsize(gyf_metadata_path) <= 0):
+								with open(gyf_metadata_path, 'w') as f:
+									bar['maximum'] = 100
+									bar['value'] = 100
+									f.write(json.dumps(gyf_metadata.json(), indent=4, sort_keys=True))
+									f.flush()
+									window.update()
 				else:
 					print('')
 
-				tree.item(count, values=(count, '', file, convertSize(total_length), 'Completed'))
+				tree.item(count, values=(count, section, name, convertSize(total_length), 'Completed'))
 
 			bar['maximum'] = 100
 			bar['value'] = 100
