@@ -52,6 +52,7 @@ def configCreator():
 	config_object['ROUTE'] = {
 		'root_directory': folder,
 		'profile_path': '[root_directory]/profiles/{userName}',
+		'singles_path': '[root_directory]singles',
 		'profile_metadata_path': '[profile_path]/metadata',
 		'profile_gyfs_path': '[profile_path]/gyfs',
 		'profile_profile_path': '[profile_path]/profile',
@@ -62,6 +63,8 @@ def configCreator():
 		'save_mobile_mp4': False,
 		'save_poster': False,
 		'save_gyf_metadata': False,
+		'save_single_gyfs_alone': False,
+		'save_single_gyfs_with_user': True,
 		'mobile_mp4_file_name': '{gfyName}_mobile.{ext}',
 		'mp4_file_name': '{gfyName}.{ext}',
 		'poster_file_name': '[mp4_file_name]',
@@ -159,16 +162,23 @@ def createPath(path):
 		if not os.path.exists(current_path_pointer + '/' +  folder):
 			os.mkdir(current_path_pointer + '/' +  folder)
 
-			current_path_pointer = current_path_pointer + '/' +  folder
+		current_path_pointer = current_path_pointer + '/' +  folder
 
-def formatFilePath(gyf_metadata, media_type):
+def formatFilePath(gyf_metadata, media_type, section):
 	global env
 
 	gyf_metadata = gyf_metadata.json()['gfyItem']
 	path = ''
 
+	if section == 'gyf':
+		if env['storage']['save_single_gyfs_alone'] == 'True' or (gyf_metadata['userName'] == None or gyf_metadata['userName'] == ''):
+			path = env['route']['singles_path']
+		
+		if env['storage']['save_single_gyfs_with_user'] == 'True' or path == '':
+			path = env['route']['profile_gyfs_path']
+
 	if media_type == 'mp4':
-		path = env['route']['profile_gyfs_path'] + '/' + env['storage']['mp4_file_name']
+		path = path + '/' + env['storage']['mp4_file_name']
 
 		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
 
@@ -181,7 +191,7 @@ def formatFilePath(gyf_metadata, media_type):
 
 		createPath(path)
 	elif media_type == 'mobile_mp4':
-		path = env['route']['profile_gyfs_path'] + '/' + env['storage']['mobile_mp4_file_name']
+		path = path + '/' + env['storage']['mobile_mp4_file_name']
 
 		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
 
@@ -194,7 +204,7 @@ def formatFilePath(gyf_metadata, media_type):
 		
 		createPath(path)
 	elif media_type == 'poster':
-		path = env['route']['profile_gyfs_path'] + '/' + env['storage']['poster_file_name']
+		path = path + '/' + env['storage']['poster_file_name']
 
 		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
 
@@ -207,7 +217,7 @@ def formatFilePath(gyf_metadata, media_type):
 		
 		createPath(path)
 	elif media_type == 'gyf_metadata':
-		path = env['route']['profile_gyfs_path'] + '/' + env['storage']['gyf_metadata_file_name']
+		path = path + '/' + env['storage']['gyf_metadata_file_name']
 
 		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
 
@@ -306,7 +316,7 @@ class RedGifsDownloader:
 								tree.yview(count-1)
 								window.update()
 
-							gyf_mp4_path = formatFilePath(gyf_metadata, 'mp4')
+							gyf_mp4_path = formatFilePath(gyf_metadata, 'mp4', section)
 
 							if not os.path.exists(gyf_mp4_path) or (os.path.exists(gyf_mp4_path) and os.path.getsize(gyf_mp4_path) <= 0):
 								with open(gyf_mp4_path, 'wb') as f:
@@ -327,7 +337,7 @@ class RedGifsDownloader:
 								tree.yview(count-1)
 								window.update()
 
-							gyf_mobile_mp4_path = formatFilePath(gyf_metadata, 'mobile_mp4')
+							gyf_mobile_mp4_path = formatFilePath(gyf_metadata, 'mobile_mp4', section)
 
 							if not os.path.exists(gyf_mobile_mp4_path) or (os.path.exists(gyf_mobile_mp4_path) and os.path.getsize(gyf_mobile_mp4_path) <= 0):
 								with open(gyf_mobile_mp4_path, 'wb') as f:
@@ -348,7 +358,7 @@ class RedGifsDownloader:
 								tree.yview(count-1)
 								window.update()
 
-							gyf_poster_path = formatFilePath(gyf_metadata, 'poster')
+							gyf_poster_path = formatFilePath(gyf_metadata, 'poster', section)
 
 							if not os.path.exists(gyf_poster_path) or (os.path.exists(gyf_poster_path) and os.path.getsize(gyf_poster_path) <= 0):
 								with open(gyf_poster_path, 'wb') as f:
@@ -367,7 +377,7 @@ class RedGifsDownloader:
 							tree.yview(count-1)
 							window.update()
 
-							gyf_metadata_path = formatFilePath(gyf_metadata, 'gyf_metadata')
+							gyf_metadata_path = formatFilePath(gyf_metadata, 'gyf_metadata', section)
 
 							if not os.path.exists(gyf_metadata_path) or (os.path.exists(gyf_metadata_path) and os.path.getsize(gyf_metadata_path) <= 0):
 								with open(gyf_metadata_path, 'w') as f:
