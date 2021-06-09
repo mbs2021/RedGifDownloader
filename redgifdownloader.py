@@ -1,4 +1,5 @@
 import os
+import re
 import pygubu
 import configparser
 import wordninja
@@ -10,31 +11,65 @@ from tkinter import filedialog
 PROJECT_PATH = os.path.dirname(__file__)
 PROJECT_UI = os.path.join(PROJECT_PATH, 'windows.ui')
 wordninja.DEFAULT_LANGUAGE_MODEL = wordninja.LanguageModel(PROJECT_PATH + '\wordninja_words.txt.gz')
+env = {}
 folder = 0
 data = 0
 
 def configLoader():
-	global folder
+	global folder, env
 
 	config_object = ConfigParser()
 	config_object.read('cfg.ini')
 	route = config_object['ROUTE']
-	folder = route['save_directory']
+	folder = route['root_directory']
+
+	for section in config_object.sections():
+		section_params = {}
+
+		for item in config_object.items(section):
+			config_key = item[0]
+			config_value = item[1]
+
+			config_param_groups = re.search(r"\[([A-Za-z0-9_]+)\]", config_value)
+
+			if config_param_groups != None:
+				for group in config_param_groups.groups():
+					config_value = config_value.replace('[' + group + ']', config_object[section].get(group))
+
+			section_params[config_key] = config_value
+		
+		env[section.lower()] = section_params
 
 def configCreator():
 	config_object = ConfigParser()
 	config_object['ROUTE'] = {
-		'save_directory' : folder
+		'root_directory': folder,
+		'profile_path': 'profiles/{username}',
+		'profile_metadata_path': '[profile_path]/metadata',
+		'profile_gyfs_path': '[profile_path]/gyfs',
+		'profile_profile_path': '[profile_path]/profile',
+	}
+
+	config_object['ROUTE'] = {
+		'root_directory': folder,
+		'profile_path': 'profiles/{username}',
+		'profile_metadata_path': '[profile_path]/metadata',
+		'profile_gyfs_path': '[profile_path]/gyfs',
+		'profile_profile_path': '[profile_path]/profile',
 	}
 
 	with open(PROJECT_PATH + '/cfg.ini', 'w') as config:
 		config_object.write(config)
 
 def configRewrite(folder):
+	global env
+
 	config_object = ConfigParser()
 	config_object.read('cfg.ini')
 	route = config_object['ROUTE']
-	route['save_directory'] = folder
+	route['root_directory'] = folder
+
+	env['route']['root_directory'] = folder
 
 	with open(PROJECT_PATH + '/cfg.ini', 'w') as config:
 		config_object.write(config)
@@ -101,8 +136,8 @@ class RedGifsDownloader:
 
 		if os.path.isfile(PROJECT_PATH + '/cfg.ini'):
 			configLoader()
-			text = builder.get_variable('lbl_foldervar')
-			text.set('Current folder: ' + folder)
+			text = builder.get_variable('lbl_foldervar')			
+			text.set('Current folder: ' + (folder if folder != '0' else 'none'))
 		else:
 			configCreator()
 		
