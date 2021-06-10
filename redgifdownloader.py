@@ -2,7 +2,6 @@ import os
 import re
 import pygubu
 import configparser
-import wordninja
 import requests
 import json
 from configparser import ConfigParser
@@ -11,7 +10,6 @@ from tkinter import filedialog
 
 PROJECT_PATH = os.path.dirname(__file__)
 PROJECT_UI = os.path.join(PROJECT_PATH, 'windows.ui')
-wordninja.DEFAULT_LANGUAGE_MODEL = wordninja.LanguageModel(PROJECT_PATH + '\wordninja_words.txt.gz')
 env = {}
 folder = 0
 data = 0
