@@ -51,24 +51,29 @@ def configCreator():
 	config_object = ConfigParser()
 	config_object['ROUTE'] = {
 		'root_directory': folder,
-		'profile_path': '[root_directory]/profiles/{userName}',
+		'profile_path': '[root_directory]/profiles/{username}',
 		'singles_path': '[root_directory]singles',
 		'profile_metadata_path': '[profile_path]/metadata',
 		'profile_gyfs_path': '[profile_path]/gyfs',
-		'profile_profile_path': '[profile_path]/profile',
+		'profile_photo_path': '[profile_path]/profile',
 	}
 
 	config_object['STORAGE'] = {
 		'save_mp4': True,
 		'save_mobile_mp4': False,
-		'save_poster': False,
-		'save_gyf_metadata': False,
+		'save_poster': True,
+		'save_gyf_metadata': True,
 		'save_single_gyfs_alone': False,
 		'save_single_gyfs_with_user': True,
-		'mobile_mp4_file_name': '{gfyName}_mobile.{ext}',
-		'mp4_file_name': '{gfyName}.{ext}',
+		'save_profile_along_with_gyf': True,
+		'save_profile_photo': True,
+		'save_profile_metadata': True,
+		'mobile_mp4_file_name': '{gfyname}_mobile.{ext}',
+		'mp4_file_name': '{gfyname}.{ext}',
 		'poster_file_name': '[mp4_file_name]',
-		'gyf_metadata_file_name': '{gfyName}.json',
+		'gyf_metadata_file_name': '{gfyname}.json',
+		'profile_photo_file_name': '{username}.{ext}',
+		'profile_metadata_file_name': '{username}.json',
 	}
 
 	with open(PROJECT_PATH + '/cfg.ini', 'w') as config:
@@ -164,18 +169,32 @@ def createPath(path):
 
 		current_path_pointer = current_path_pointer + '/' +  folder
 
-def formatFilePath(gyf_metadata, media_type, section):
+def lower_keys(x):
+	if isinstance(x, list):
+		return [lower_keys(v) for v in x]
+	elif isinstance(x, dict):
+		return dict((k.lower(), lower_keys(v)) for k, v in x.items())
+	else:
+		return x
+
+def formatFilePath(request, media_type, section):
 	global env
 
-	gyf_metadata = gyf_metadata.json()['gfyItem']
+	request = request.json()['gfyItem'] if 'gfyItem' in request.json() else request.json()
+	request = lower_keys(request)
 	path = ''
 
 	if section == 'gyf':
-		if env['storage']['save_single_gyfs_alone'] == 'True' or (gyf_metadata['userName'] == None or gyf_metadata['userName'] == ''):
+		if env['storage']['save_single_gyfs_alone'] == 'True' or (request['username'] == None or request['username'] == ''):
 			path = env['route']['singles_path']
 		
 		if env['storage']['save_single_gyfs_with_user'] == 'True' or path == '':
 			path = env['route']['profile_gyfs_path']
+	elif section == 'user':
+		if media_type == 'profile_photo':
+			path = env['route']['profile_photo_path']
+		elif media_type == 'profile_metadata':
+			path = env['route']['profile_metadata_path']
 
 	if media_type == 'mp4':
 		path = path + '/' + env['storage']['mp4_file_name']
@@ -185,9 +204,9 @@ def formatFilePath(gyf_metadata, media_type, section):
 		if dynamic_variables != None:
 			for group in dynamic_variables:
 				if group != 'ext':
-					path = path.replace('{' + group + '}', gyf_metadata[group])
+					path = path.replace('{' + group + '}', request[group])
 				else:
-					path = path.replace('{ext}', gyf_metadata['mp4Url'].split('.')[-1])
+					path = path.replace('{ext}', request['mp4url'].split('.')[-1])
 
 		createPath(path)
 	elif media_type == 'mobile_mp4':
@@ -198,9 +217,9 @@ def formatFilePath(gyf_metadata, media_type, section):
 		if dynamic_variables != None:
 			for group in dynamic_variables:
 				if group != 'ext':
-					path = path.replace('{' + group + '}', gyf_metadata[group])
+					path = path.replace('{' + group + '}', request[group])
 				else:
-					path = path.replace('{ext}', gyf_metadata['mobileUrl'].split('.')[-1])
+					path = path.replace('{ext}', request['mobileurl'].split('.')[-1])
 		
 		createPath(path)
 	elif media_type == 'poster':
@@ -211,9 +230,9 @@ def formatFilePath(gyf_metadata, media_type, section):
 		if dynamic_variables != None:
 			for group in dynamic_variables:
 				if group != 'ext':
-					path = path.replace('{' + group + '}', gyf_metadata[group])
+					path = path.replace('{' + group + '}', request[group])
 				else:
-					path = path.replace('{ext}', gyf_metadata['posterUrl'].split('.')[-1])
+					path = path.replace('{ext}', request['posterurl'].split('.')[-1])
 		
 		createPath(path)
 	elif media_type == 'gyf_metadata':
@@ -224,7 +243,31 @@ def formatFilePath(gyf_metadata, media_type, section):
 		if dynamic_variables != None:
 			for group in dynamic_variables:
 				if group != 'ext':
-					path = path.replace('{' + group + '}', gyf_metadata[group])
+					path = path.replace('{' + group + '}', request[group])
+
+		createPath(path)
+	elif media_type == 'profile_photo':
+		path = path + '/' + env['storage']['profile_photo_file_name']
+
+		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
+
+		if dynamic_variables != None:
+			for group in dynamic_variables:
+				if group != 'ext':
+					path = path.replace('{' + group + '}', request[group])
+				else:
+					path = path.replace('{ext}', request['profileimageurl'].split('.')[-1])
+
+		createPath(path)
+	elif media_type == 'profile_metadata':
+		path = path + '/' + env['storage']['profile_metadata_file_name']
+
+		dynamic_variables = re.findall(r"\{([A-Za-z0-9_]+)\}", path)
+
+		if dynamic_variables != None:
+			for group in dynamic_variables:
+				if group != 'ext':
+					path = path.replace('{' + group + '}', request[group])
 
 		createPath(path)
 
@@ -271,7 +314,7 @@ class RedGifsDownloader:
 			populateTable(data, self.builder.get_object('tv_files'), self.builder.get_object('toplevel'))
 
 	def downloadFiles(self):
-		global data, data2, folder
+		global data, data2, folder, env
 
 		count = 0
 		window = self.builder.get_object('toplevel')
@@ -386,8 +429,45 @@ class RedGifsDownloader:
 									f.write(json.dumps(gyf_metadata.json(), indent=4, sort_keys=True))
 									f.flush()
 									window.update()
-				else:
-					print('')
+				
+						if env['storage']['save_profile_along_with_gyf'] == 'True':
+							user_request = requests.get('https://api.redgifs.com/v1/users/' + gyf_metadata.json()['gfyItem']['userName'])
+
+							if user_request.ok:
+								if env['storage']['save_profile_photo'] == 'True' and 'profileImageUrl' in user_request.json():
+									profile_photo = gyfRequest(user_request.json()['profileImageUrl'], True)
+									total_length = int(profile_photo.headers.get('content-length'))
+									tree.item(count, values=(count, section + ' - profile photo', name, convertSize(total_length), 'Downloading'))
+									tree.yview(count-1)
+									window.update()
+									profile_photo_path = formatFilePath(user_request, 'profile_photo', 'user')
+
+									if not os.path.exists(profile_photo_path) or (os.path.exists(profile_photo_path) and os.path.getsize(profile_photo_path) <= 0):
+										with open(profile_photo_path, 'w') as f:
+											bar['maximum'] = total_length
+
+											for chunk in profile_photo.iter_content(chunk_size=1024):
+												if chunk:
+													bar.step(1024)
+													window.update()
+													f.write(chunk)
+													f.flush()
+
+								if env['storage']['save_profile_metadata'] == 'True':
+									total_length = int(user_request.headers.get('content-length'))
+									tree.item(count, values=(count, section + ' - profile metadata', name, convertSize(total_length), 'Downloading'))
+									tree.yview(count-1)
+									window.update()
+
+									profile_metadata_path = formatFilePath(user_request, 'profile_metadata', 'user')
+
+									if not os.path.exists(profile_metadata_path) or (os.path.exists(profile_metadata_path) and os.path.getsize(profile_metadata_path) <= 0):
+										with open(profile_metadata_path, 'w') as f:
+											bar['maximum'] = 100
+											bar['value'] = 100
+											f.write(json.dumps(user_request.json(), indent=4, sort_keys=True))
+											f.flush()
+											window.update()
 
 				tree.item(count, values=(count, section, name, convertSize(total_length), 'Completed'))
 
