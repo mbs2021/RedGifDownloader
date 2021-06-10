@@ -101,6 +101,14 @@ def gyfMetadataRequest(gyf_name, stream = False):
 	
 	return None
 
+def userMetadataRequest(username, stream = False):
+	request = requests.get('https://api.redgifs.com/v1/users/' + username, stream=stream)
+
+	if request.ok:
+		return request
+	
+	return None
+
 def gyfRequest(url, stream = False):
 	request = requests.get(url, stream=stream)
 
@@ -131,6 +139,10 @@ def populateTable(data, tree, window):
 				section = 'gyf'
 				name = x.split('/watch/')
 				name = ''.join([name[index] for index in [1]])
+			elif x.find('/users/') != -1:
+				section = 'user'
+				name = x.split('/users/')
+				name = ''.join([name[index] for index in [1]])
 			else:
 				section = 'gyf'
 				name = x.split('.com/')
@@ -145,14 +157,16 @@ def populateTable(data, tree, window):
 		if name:
 			count += 1
 			gyf_metadata = gyfMetadataRequest(name, True)
+			total_length = 0
 
 			if gyf_metadata:
 				if 'gfyItem' in gyf_metadata.json() and 'mp4Url' in gyf_metadata.json()['gfyItem']:
 					gyf_mp4 = gyfRequest(gyf_metadata.json()['gfyItem']['mp4Url'])
 					total_length = int(gyf_mp4.headers.get('content-length'))
-					tree.insert('', 'end', iid=count, values=(count, section, name, convertSize(total_length), 'Pending'))
-					tree.yview(count-2)
-					window.update()
+			
+			tree.insert('', 'end', iid=count, values=(count, section, name, convertSize(total_length), 'Pending'))
+			tree.yview(count-2)
+			window.update()
 
 def createPath(path):
 	global env
@@ -178,7 +192,7 @@ def lower_keys(x):
 def formatFilePath(request, media_type, section):
 	global env
 
-	request = request.json()['gfyItem'] if 'gfyItem' in request.json() else request.json()
+	request = request['gfyItem'] if 'gfyItem' in request else request
 	request = lower_keys(request)
 	path = ''
 
@@ -193,6 +207,8 @@ def formatFilePath(request, media_type, section):
 			path = env['route']['profile_photo_path']
 		elif media_type == 'profile_metadata':
 			path = env['route']['profile_metadata_path']
+		else:
+			path = env['route']['profile_gyfs_path']
 
 	if media_type == 'mp4':
 		path = path + '/' + env['storage']['mp4_file_name']
@@ -271,6 +287,147 @@ def formatFilePath(request, media_type, section):
 
 	return path
 
+def getUserGyfs(username, cursor = None):
+	user_gyfs = []
+
+	user_gyfs_request = requests.get('https://api.redgifs.com/v1/users/' + username + '/gfycats?count=100' + ('&cursor=' + cursor if not cursor == None else ''))
+
+	if user_gyfs_request.ok:
+		user_gyfs = user_gyfs_request.json()['gfycats']
+
+		if len(user_gyfs_request.json()['gfycats']) == 100:
+			user_gyfs = user_gyfs + getUserGyfs(username, user_gyfs_request.json()['cursor'])
+		
+	return user_gyfs
+
+def downloadGyf(gyf_request, name, section, total_lenght, count, window, tree, bar):
+	global env
+	
+	gyf_metadata = gyf_request.json() if type(gyf_request) != dict else gyf_request
+
+	if env['storage']['save_mp4'] == 'True':
+		if ('gfyItem' in gyf_metadata and 'mp4Url' in gyf_metadata['gfyItem']) or ('mp4Url' in gyf_metadata):
+			mp4Url = gyf_metadata['gfyItem']['mp4Url'] if ('gfyItem' in gyf_metadata and 'mp4Url' in gyf_metadata['gfyItem']) else gyf_metadata['mp4Url']
+			gyf_mp4 = gyfRequest(mp4Url, True)
+			total_length = int(gyf_mp4.headers.get('content-length'))
+			tree.item(count, values=(count, section + ' - mp4', name, convertSize(total_length), 'Downloading'))
+			tree.yview(count-1)
+			window.update()
+
+		gyf_mp4_path = formatFilePath(gyf_metadata, 'mp4', section)
+
+		if not os.path.exists(gyf_mp4_path) or (os.path.exists(gyf_mp4_path) and os.path.getsize(gyf_mp4_path) <= 0):
+			with open(gyf_mp4_path, 'wb') as f:
+				bar['maximum'] = total_length
+
+				for chunk in gyf_mp4.iter_content(chunk_size=1024):
+					if chunk:
+						bar.step(1024)
+						window.update()
+						f.write(chunk)
+						f.flush()
+	
+	if env['storage']['save_mobile_mp4'] == 'True':
+		if ('gfyItem' in gyf_metadata and 'mobileUrl' in gyf_metadata['gfyItem']) or ('mobileUrl' in gyf_metadata):
+			mobileUrl = gyf_metadata['gfyItem']['mobileUrl'] if ('gfyItem' in gyf_metadata and 'mobileUrl' in gyf_metadata['gfyItem']) else gyf_metadata['mobileUrl']
+			gyf_mobile_mp4 = gyfRequest(mobileUrl, True)
+			total_length = int(gyf_mobile_mp4.headers.get('content-length'))
+			tree.item(count, values=(count, section + ' - mobile mp4', name, convertSize(total_length), 'Downloading'))
+			tree.yview(count-1)
+			window.update()
+
+		gyf_mobile_mp4_path = formatFilePath(gyf_metadata, 'mobile_mp4', section)
+
+		if not os.path.exists(gyf_mobile_mp4_path) or (os.path.exists(gyf_mobile_mp4_path) and os.path.getsize(gyf_mobile_mp4_path) <= 0):
+			with open(gyf_mobile_mp4_path, 'wb') as f:
+				bar['maximum'] = total_length
+
+				for chunk in gyf_mobile_mp4.iter_content(chunk_size=1024):
+					if chunk:
+						bar.step(1024)
+						window.update()
+						f.write(chunk)
+						f.flush()
+	
+	if env['storage']['save_poster'] == 'True':
+		if ('gfyItem' in gyf_metadata and 'posterUrl' in gyf_metadata['gfyItem']) or ('posterUrl' in gyf_metadata):
+			posterUrl = gyf_metadata['gfyItem']['posterUrl'] if ('gfyItem' in gyf_metadata and 'posterUrl' in gyf_metadata['gfyItem']) else gyf_metadata['posterUrl']
+			gyf_poster = gyfRequest(posterUrl, True)
+			total_length = int(gyf_poster.headers.get('content-length'))
+			tree.item(count, values=(count, section + ' - poster', name, convertSize(total_length), 'Downloading'))
+			tree.yview(count-1)
+			window.update()
+
+		gyf_poster_path = formatFilePath(gyf_metadata, 'poster', section)
+
+		if not os.path.exists(gyf_poster_path) or (os.path.exists(gyf_poster_path) and os.path.getsize(gyf_poster_path) <= 0):
+			with open(gyf_poster_path, 'wb') as f:
+				bar['maximum'] = total_length
+
+				for chunk in gyf_poster.iter_content(chunk_size=1024):
+					if chunk:
+						bar.step(1024)
+						window.update()
+						f.write(chunk)
+						f.flush()
+	
+	if env['storage']['save_gyf_metadata'] == 'True':
+		total_length = int(gyf_request.headers.get('content-length'))
+		tree.item(count, values=(count, section + ' - metadata', name, convertSize(total_length), 'Downloading'))
+		tree.yview(count-1)
+		window.update()
+
+		gyf_metadata_path = formatFilePath(gyf_metadata, 'gyf_metadata', section)
+
+		if not os.path.exists(gyf_metadata_path) or (os.path.exists(gyf_metadata_path) and os.path.getsize(gyf_metadata_path) <= 0):
+			with open(gyf_metadata_path, 'w') as f:
+				bar['maximum'] = 100
+				bar['value'] = 100
+				f.write(json.dumps(gyf_metadata, indent=4, sort_keys=True))
+				f.flush()
+				window.update()
+
+	if section == 'gyf' and env['storage']['save_profile_along_with_gyf'] == 'True':
+		user_request_raw = userMetadataRequest(gyf_metadata['gfyItem']['userName'])
+
+		if user_request_raw.ok:
+			user_request = user_request_raw.json()
+
+			if env['storage']['save_profile_photo'] == 'True' and 'profileImageUrl' in user_request:
+				profile_photo = gyfRequest(user_request['profileImageUrl'], True)
+				total_length = int(profile_photo.headers.get('content-length'))
+				tree.item(count, values=(count, section + ' - profile photo', name, convertSize(total_length), 'Downloading'))
+				tree.yview(count-1)
+				window.update()
+				profile_photo_path = formatFilePath(user_request, 'profile_photo', 'user')
+
+				if not os.path.exists(profile_photo_path) or (os.path.exists(profile_photo_path) and os.path.getsize(profile_photo_path) <= 0):
+					with open(profile_photo_path, 'wb') as f:
+						bar['maximum'] = total_length
+
+						for chunk in profile_photo.iter_content(chunk_size=1024):
+							if chunk:
+								bar.step(1024)
+								window.update()
+								f.write(chunk)
+								f.flush()
+
+			if env['storage']['save_profile_metadata'] == 'True':
+				total_length = int(user_request_raw.headers.get('content-length'))
+				tree.item(count, values=(count, section + ' - profile metadata', name, convertSize(total_length), 'Downloading'))
+				tree.yview(count-1)
+				window.update()
+
+				profile_metadata_path = formatFilePath(user_request, 'profile_metadata', 'user')
+
+				if not os.path.exists(profile_metadata_path) or (os.path.exists(profile_metadata_path) and os.path.getsize(profile_metadata_path) <= 0):
+					with open(profile_metadata_path, 'w') as f:
+						bar['maximum'] = 100
+						bar['value'] = 100
+						f.write(json.dumps(user_request, indent=4, sort_keys=True))
+						f.flush()
+						window.update()
+
 class RedGifsDownloader:
 	def __init__(self):
 		self.builder = builder = pygubu.Builder()
@@ -330,6 +487,10 @@ class RedGifsDownloader:
 						section = 'gyf'
 						name = x.split('/watch/')
 						name = ''.join([name[index] for index in [1]])
+					elif x.find('/users/') != -1:
+						section = 'user'
+						name = x.split('/users/')
+						name = ''.join([name[index] for index in [1]])
 					else:
 						section = 'gyf'
 						name = x.split('.com/')
@@ -345,127 +506,55 @@ class RedGifsDownloader:
 				bar['value'] = 0
 				count += 1
 
-				if name:
+				if name and section == 'gyf':
 					gyf_metadata = gyfMetadataRequest(name, True)
 
-					if gyf_metadata:
-						if env['storage']['save_mp4'] == 'True':
-							if 'gfyItem' in gyf_metadata.json() and 'mp4Url' in gyf_metadata.json()['gfyItem']:
-								gyf_mp4 = gyfRequest(gyf_metadata.json()['gfyItem']['mp4Url'], True)
-								total_length = int(gyf_mp4.headers.get('content-length'))
-								tree.item(count, values=(count, section + ' - mp4', name, convertSize(total_length), 'Downloading'))
-								tree.yview(count-1)
-								window.update()
+					if gyf_metadata and gyf_metadata.ok:
+						downloadGyf(gyf_metadata, name, section, total_length, count, window, tree, bar)
+				elif name and section == 'user':
+					user_metadata = userMetadataRequest(name, True)
 
-							gyf_mp4_path = formatFilePath(gyf_metadata, 'mp4', section)
-
-							if not os.path.exists(gyf_mp4_path) or (os.path.exists(gyf_mp4_path) and os.path.getsize(gyf_mp4_path) <= 0):
-								with open(gyf_mp4_path, 'wb') as f:
-									bar['maximum'] = total_length
-
-									for chunk in gyf_mp4.iter_content(chunk_size=1024):
-										if chunk:
-											bar.step(1024)
-											window.update()
-											f.write(chunk)
-											f.flush()
-						
-						if env['storage']['save_mobile_mp4'] == 'True':
-							if 'gfyItem' in gyf_metadata.json() and 'mobileUrl' in gyf_metadata.json()['gfyItem']:
-								gyf_mobile_mp4 = gyfRequest(gyf_metadata.json()['gfyItem']['mobileUrl'], True)
-								total_length = int(gyf_mobile_mp4.headers.get('content-length'))
-								tree.item(count, values=(count, section + ' - mobile mp4', name, convertSize(total_length), 'Downloading'))
-								tree.yview(count-1)
-								window.update()
-
-							gyf_mobile_mp4_path = formatFilePath(gyf_metadata, 'mobile_mp4', section)
-
-							if not os.path.exists(gyf_mobile_mp4_path) or (os.path.exists(gyf_mobile_mp4_path) and os.path.getsize(gyf_mobile_mp4_path) <= 0):
-								with open(gyf_mobile_mp4_path, 'wb') as f:
-									bar['maximum'] = total_length
-
-									for chunk in gyf_mobile_mp4.iter_content(chunk_size=1024):
-										if chunk:
-											bar.step(1024)
-											window.update()
-											f.write(chunk)
-											f.flush()
-						
-						if env['storage']['save_poster'] == 'True':
-							if 'gfyItem' in gyf_metadata.json() and 'posterUrl' in gyf_metadata.json()['gfyItem']:
-								gyf_poster = gyfRequest(gyf_metadata.json()['gfyItem']['posterUrl'], True)
-								total_length = int(gyf_poster.headers.get('content-length'))
-								tree.item(count, values=(count, section + ' - poster', name, convertSize(total_length), 'Downloading'))
-								tree.yview(count-1)
-								window.update()
-
-							gyf_poster_path = formatFilePath(gyf_metadata, 'poster', section)
-
-							if not os.path.exists(gyf_poster_path) or (os.path.exists(gyf_poster_path) and os.path.getsize(gyf_poster_path) <= 0):
-								with open(gyf_poster_path, 'wb') as f:
-									bar['maximum'] = total_length
-
-									for chunk in gyf_poster.iter_content(chunk_size=1024):
-										if chunk:
-											bar.step(1024)
-											window.update()
-											f.write(chunk)
-											f.flush()
-						
-						if env['storage']['save_gyf_metadata'] == 'True':
-							total_length = int(gyf_metadata.headers.get('content-length'))
-							tree.item(count, values=(count, section + ' - metadata', name, convertSize(total_length), 'Downloading'))
+					if user_metadata:				
+						if env['storage']['save_profile_photo'] == 'True' and 'profileImageUrl' in user_metadata.json():
+							profile_photo = gyfRequest(user_metadata.json()['profileImageUrl'], True)
+							total_length = int(profile_photo.headers.get('content-length'))
+							tree.item(count, values=(count, section + ' - profile photo', name, convertSize(total_length), 'Downloading'))
 							tree.yview(count-1)
 							window.update()
 
-							gyf_metadata_path = formatFilePath(gyf_metadata, 'gyf_metadata', section)
+							profile_photo_path = formatFilePath(user_metadata.json(), 'profile_photo', 'user')
 
-							if not os.path.exists(gyf_metadata_path) or (os.path.exists(gyf_metadata_path) and os.path.getsize(gyf_metadata_path) <= 0):
-								with open(gyf_metadata_path, 'w') as f:
+							if not os.path.exists(profile_photo_path) or (os.path.exists(profile_photo_path) and os.path.getsize(profile_photo_path) <= 0):
+								with open(profile_photo_path, 'wb') as f:
+									bar['maximum'] = total_length
+
+									for chunk in profile_photo.iter_content(chunk_size=1024):
+										if chunk:
+											bar.step(1024)
+											window.update()
+											f.write(chunk)
+											f.flush()
+
+						if env['storage']['save_profile_metadata'] == 'True':
+							total_length = int(user_metadata.headers.get('content-length'))
+							tree.item(count, values=(count, section + ' - profile metadata', name, convertSize(total_length), 'Downloading'))
+							tree.yview(count-1)
+							window.update()
+
+							profile_metadata_path = formatFilePath(user_metadata.json(), 'profile_metadata', 'user')
+
+							if not os.path.exists(profile_metadata_path) or (os.path.exists(profile_metadata_path) and os.path.getsize(profile_metadata_path) <= 0):
+								with open(profile_metadata_path, 'w') as f:
 									bar['maximum'] = 100
 									bar['value'] = 100
-									f.write(json.dumps(gyf_metadata.json(), indent=4, sort_keys=True))
+									f.write(json.dumps(user_metadata.json(), indent=4, sort_keys=True))
 									f.flush()
 									window.update()
-				
-						if env['storage']['save_profile_along_with_gyf'] == 'True':
-							user_request = requests.get('https://api.redgifs.com/v1/users/' + gyf_metadata.json()['gfyItem']['userName'])
 
-							if user_request.ok:
-								if env['storage']['save_profile_photo'] == 'True' and 'profileImageUrl' in user_request.json():
-									profile_photo = gyfRequest(user_request.json()['profileImageUrl'], True)
-									total_length = int(profile_photo.headers.get('content-length'))
-									tree.item(count, values=(count, section + ' - profile photo', name, convertSize(total_length), 'Downloading'))
-									tree.yview(count-1)
-									window.update()
-									profile_photo_path = formatFilePath(user_request, 'profile_photo', 'user')
+					user_gyfs = getUserGyfs(name)
 
-									if not os.path.exists(profile_photo_path) or (os.path.exists(profile_photo_path) and os.path.getsize(profile_photo_path) <= 0):
-										with open(profile_photo_path, 'w') as f:
-											bar['maximum'] = total_length
-
-											for chunk in profile_photo.iter_content(chunk_size=1024):
-												if chunk:
-													bar.step(1024)
-													window.update()
-													f.write(chunk)
-													f.flush()
-
-								if env['storage']['save_profile_metadata'] == 'True':
-									total_length = int(user_request.headers.get('content-length'))
-									tree.item(count, values=(count, section + ' - profile metadata', name, convertSize(total_length), 'Downloading'))
-									tree.yview(count-1)
-									window.update()
-
-									profile_metadata_path = formatFilePath(user_request, 'profile_metadata', 'user')
-
-									if not os.path.exists(profile_metadata_path) or (os.path.exists(profile_metadata_path) and os.path.getsize(profile_metadata_path) <= 0):
-										with open(profile_metadata_path, 'w') as f:
-											bar['maximum'] = 100
-											bar['value'] = 100
-											f.write(json.dumps(user_request.json(), indent=4, sort_keys=True))
-											f.flush()
-											window.update()
+					for gyf in user_gyfs:
+						downloadGyf(gyf, name, section, total_length, count, window, tree, bar)
 
 				tree.item(count, values=(count, section, name, convertSize(total_length), 'Completed'))
 
