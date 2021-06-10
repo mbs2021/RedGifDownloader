@@ -372,7 +372,7 @@ def downloadGyf(gyf_request, name, section, total_lenght, count, window, tree, b
 						f.flush()
 	
 	if env['storage']['save_gyf_metadata'] == 'True':
-		total_length = int(gyf_request.headers.get('content-length'))
+		total_length = int(gyf_request.headers.get('content-length') if type(gyf_request) != dict else 0)
 		tree.item(count, values=(count, section + ' - metadata', name, convertSize(total_length), 'Downloading'))
 		tree.yview(count-1)
 		window.update()
