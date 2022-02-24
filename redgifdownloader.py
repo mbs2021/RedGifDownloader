@@ -371,7 +371,7 @@ def downloadGif(gif_request, name, section, total_length, count, window, tree, b
 								f.flush()
 	
 	if env['storage']['save_gif_metadata'] == 'True':
-		total_length = int(gif_request.headers.get('Content-Length') if 'Content-Length' in gif_request.headers else 0)
+		total_length = 0
 		tree.item(count, values=(count, pretty_name + ' - metadata', name, 'Downloading'))
 		tree.yview(count-1)
 		window.update()
